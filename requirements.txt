@@ -1,0 +1,7 @@
+streamlit
+mammoth
+beautifulsoup4
+lxml
+python-docx
+zipfile36
+xml-python
