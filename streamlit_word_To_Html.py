@@ -53,24 +53,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# VOTRE CODE - Adapté pour Streamlit
 def ameliorations_typographiques(soup):
     """Applique des améliorations typographiques au contenu HTML"""
     apostrophes_changees = 0
     mots_tirets_wrapes = 0
     
-    # Parcourir tous les éléments textuels
     for element in soup.find_all(string=True):
         if element.parent.name not in ['script', 'style']:
             texte_original = str(element)
             texte_modifie = texte_original
             
-            # 1. Remplacer les apostrophes droites par des apostrophes courbes
             apostrophes_avant = texte_modifie.count("'")
             texte_modifie = texte_modifie.replace("'", "'")
             apostrophes_changees += apostrophes_avant
             
-            # 2. Identifier et protéger les mots avec tirets
             pattern_tirets = r'\b([a-zA-ZÀ-ÿ]+(?:-[a-zA-ZÀ-ÿ]+)+)\b'
             
             def wrap_mot_tiret(match):
@@ -81,7 +77,6 @@ def ameliorations_typographiques(soup):
             
             texte_modifie = re.sub(pattern_tirets, wrap_mot_tiret, texte_modifie)
             
-            # Remplacer le texte si il y a eu des modifications
             if texte_modifie != texte_original:
                 if '<span' in texte_modifie:
                     fragment = BeautifulSoup(texte_modifie, 'html.parser')
@@ -121,8 +116,232 @@ def detecter_et_convertir_titres(soup):
     
     return titres_convertis
 
+def detecter_et_convertir_table_matieres(soup):
+    """Détecte et convertit les tables de matières en listes avec liens"""
+    toc_convertie = False
+    
+    for h2 in soup.find_all('h2'):
+        texte_titre = h2.get_text().lower()
+        
+        if ('table des matières' in texte_titre or 
+            'table of contents' in texte_titre or
+            'table des matieres' in texte_titre):
+            
+            st.info(f"📋 Table des matières détectée: {h2.get_text()}")
+            
+            next_element = h2.find_next_sibling()
+            while next_element and next_element.name not in ['ol', 'ul']:
+                next_element = next_element.find_next_sibling()
+            
+            if next_element and next_element.name in ['ol', 'ul']:
+                convertir_liste_en_toc_simple(next_element, soup)
+                toc_convertie = True
+                break
+    
+    return toc_convertie
+
+def convertir_liste_en_toc_simple(liste_element, soup):
+    """Convertit une liste en table des matières avec liens"""
+    
+    def nettoyer_texte(texte):
+        texte = texte.strip()
+        texte = re.sub(r'^\d+\.?\s*', '', texte)
+        texte = re.sub(r'^\d+\.\d+\.?\s*', '', texte)
+        texte = re.sub(r'^\d+\.\d+\.\d+\.?\s*', '', texte)
+        return texte.strip()
+    
+    if liste_element.name == 'ol':
+        liste_element.name = 'ul'
+    
+    items_niveau_1 = liste_element.find_all('li', recursive=False)
+    
+    for i, li in enumerate(items_niveau_1):
+        numero_1 = str(i + 1)
+        
+        # Extraire le texte du li principal
+        texte_li = ""
+        for content in li.contents:
+            if hasattr(content, 'name'):
+                if content.name not in ['ol', 'ul']:
+                    texte_li += content.get_text() if hasattr(content, 'get_text') else str(content)
+            else:
+                texte_li += str(content)
+        
+        texte_clean = nettoyer_texte(texte_li)
+        
+        # Sauvegarder les sous-listes avant de vider
+        sous_listes_niveau_2 = li.find_all(['ol', 'ul'], recursive=False)
+        
+        # Vider et reconstruire
+        li.clear()
+        
+        # Créer le lien principal
+        if texte_clean:
+            lien = soup.new_tag('a', href=f"#{numero_1}")
+            lien.string = f"{numero_1}.&nbsp;{texte_clean}"
+            li.append(lien)
+        
+        # Traiter niveau 2
+        if sous_listes_niveau_2:
+            nouvelle_ul_2 = soup.new_tag('ul')
+            items_niveau_2 = sous_listes_niveau_2[0].find_all('li', recursive=False)
+            
+            for j, li_2 in enumerate(items_niveau_2):
+                numero_2 = f"{numero_1}.{j + 1}"
+                
+                # Extraire texte niveau 2
+                texte_li_2 = ""
+                for content in li_2.contents:
+                    if hasattr(content, 'name'):
+                        if content.name not in ['ol', 'ul']:
+                            texte_li_2 += content.get_text() if hasattr(content, 'get_text') else str(content)
+                    else:
+                        texte_li_2 += str(content)
+                
+                texte_clean_2 = nettoyer_texte(texte_li_2)
+                
+                # Sauvegarder sous-listes niveau 3
+                sous_listes_niveau_3 = li_2.find_all(['ol', 'ul'], recursive=False)
+                
+                # Créer nouveau li niveau 2
+                nouveau_li_2 = soup.new_tag('li')
+                
+                if texte_clean_2:
+                    lien_2 = soup.new_tag('a', href=f"#{numero_2}")
+                    lien_2.string = f"{numero_2}&nbsp;{texte_clean_2}"
+                    nouveau_li_2.append(lien_2)
+                
+                # Traiter niveau 3
+                if sous_listes_niveau_3:
+                    nouvelle_ul_3 = soup.new_tag('ul')
+                    items_niveau_3 = sous_listes_niveau_3[0].find_all('li', recursive=False)
+                    
+                    for k, li_3 in enumerate(items_niveau_3):
+                        numero_3 = f"{numero_2}.{k + 1}"
+                        
+                        texte_li_3 = ""
+                        for content in li_3.contents:
+                            if hasattr(content, 'name'):
+                                if content.name not in ['ol', 'ul']:
+                                    texte_li_3 += content.get_text() if hasattr(content, 'get_text') else str(content)
+                            else:
+                                texte_li_3 += str(content)
+                        
+                        texte_clean_3 = nettoyer_texte(texte_li_3)
+                        
+                        if texte_clean_3:
+                            nouveau_li_3 = soup.new_tag('li')
+                            lien_3 = soup.new_tag('a', href=f"#{numero_3}")
+                            lien_3.string = f"{numero_3}&nbsp;{texte_clean_3}"
+                            nouveau_li_3.append(lien_3)
+                            nouvelle_ul_3.append(nouveau_li_3)
+                    
+                    if nouvelle_ul_3.contents:
+                        nouveau_li_2.append(nouvelle_ul_3)
+                
+                nouvelle_ul_2.append(nouveau_li_2)
+            
+            if nouvelle_ul_2.contents:
+                li.append(nouvelle_ul_2)
+
+def ameliorer_traitement_tableaux(soup):
+    """Améliore le traitement des tableaux"""
+    tableaux_traites = 0
+    
+    # Gérer les listes qui précèdent les tableaux
+    for ol in soup.find_all('ol'):
+        items = ol.find_all('li', recursive=False)
+        
+        if len(items) == 1:
+            texte_item = items[0].get_text().strip()
+            next_sibling = ol.find_next_sibling()
+            
+            while next_sibling and not (next_sibling.name == 'div' and 'table-responsive' in str(next_sibling.get('class', []))):
+                next_sibling = next_sibling.find_next_sibling()
+            
+            if (next_sibling and 
+                'table-responsive' in str(next_sibling.get('class', [])) and
+                len(texte_item) < 100):
+                
+                table = next_sibling.find('table')
+                if table:
+                    caption = table.find('caption')
+                    if caption:
+                        caption.string = texte_item
+                    ol.decompose()
+    
+    # Améliorer la structure des tableaux
+    for table_div in soup.find_all('div', class_='table-responsive'):
+        table = table_div.find('table')
+        if not table:
+            continue
+            
+        tableaux_traites += 1
+        
+        thead = table.find('thead')
+        tbody = table.find('tbody')
+        
+        if tbody and not thead:
+            rows = tbody.find_all('tr')
+            if rows:
+                thead = soup.new_tag('thead')
+                thead['class'] = 'well'
+                
+                header_row = soup.new_tag('tr')
+                
+                th1 = soup.new_tag('th', scope='col')
+                th1.string = "Élément"
+                
+                th2 = soup.new_tag('th', scope='col')
+                th2.string = "Description"
+                
+                header_row.append(th1)
+                header_row.append(th2)
+                thead.append(header_row)
+                
+                if table.caption:
+                    table.insert(table.contents.index(table.caption) + 1, thead)
+                else:
+                    table.insert(0, thead)
+        
+        # Nettoyer le contenu des cellules
+        for cell in table.find_all(['td', 'th']):
+            for p in cell.find_all('p'):
+                if p.get_text().strip():
+                    p.replace_with(p.get_text())
+                else:
+                    p.decompose()
+        
+        # S'assurer que les cellules de la première colonne ont scope="row"
+        if tbody:
+            for row in tbody.find_all('tr'):
+                cells = row.find_all(['td', 'th'])
+                if cells:
+                    cells[0]['scope'] = 'row'
+    
+    return tableaux_traites
+
+def ajouter_ids_aux_titres(soup):
+    """Ajoute des IDs aux titres H2"""
+    titres_avec_id = 0
+    
+    for i, h2 in enumerate(soup.find_all('h2')):
+        if not h2.get('id'):
+            texte_titre = h2.get_text().strip()
+            
+            match = re.match(r'^(\d+)\.?\s*', texte_titre)
+            if match:
+                numero = match.group(1)
+                h2['id'] = numero
+            else:
+                h2['id'] = str(i + 1)
+            
+            titres_avec_id += 1
+    
+    return titres_avec_id
+
 def analyser_structure_document_bytes(fichier_word_bytes):
-    """Analyse la structure complète du document Word pour préserver l'ordre exact"""
+    """Analyse la structure complète du document Word"""
     elements_document = []
     
     try:
@@ -163,8 +382,8 @@ def analyser_structure_document_bytes(fichier_word_bytes):
         return []
 
 def nettoyer_images_dans_html(html_content):
-    """Remplace toutes les images avec des données longues par l'image sample"""
-    placeholder_path = "img_sample.jpg"  # Utilise toujours img_sample.jpg
+    """Remplace les images avec des données longues"""
+    placeholder_path = "img_sample.jpg"
     pattern_img_longue = r'<img[^>]*src="data:image/[^"]{100,}"[^>]*/?>'
     images_longues = re.findall(pattern_img_longue, html_content)
     
@@ -179,7 +398,7 @@ def nettoyer_images_dans_html(html_content):
     return html_nettoye, len(images_longues)
 
 def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
-    """Convertit un fichier Word en HTML avec votre code complet"""
+    """Convertit un fichier Word en HTML avec toutes les fonctionnalités"""
     try:
         import mammoth
         
@@ -192,11 +411,12 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
         html_nettoye, nb_images_remplacees = nettoyer_images_dans_html(html)
         soup = BeautifulSoup(html_nettoye, 'html.parser')
         
-        # ÉTAPE 1 : Détecter et convertir les titres
+        # Toutes les étapes de traitement
         titres_convertis = detecter_et_convertir_titres(soup)
-        
-        # ÉTAPE 2 : Améliorations typographiques
         apostrophes_changees, mots_tirets_wrapes = ameliorations_typographiques(soup)
+        toc_convertie = detecter_et_convertir_table_matieres(soup)
+        tableaux_traites = ameliorer_traitement_tableaux(soup)
+        titres_avec_id = ajouter_ids_aux_titres(soup)
         
         # Gestion des images manquantes
         images_html = soup.find_all('img')
@@ -226,7 +446,7 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
                                             images_ajoutees += 1
                                 break
         
-        # Nettoyage final (votre code de nettoyage)
+        # Nettoyage final
         for p in soup.find_all('p'):
             if not p.get_text(strip=True) and not p.find('img') and not p.find_next_sibling('img'):
                 p.decompose()
@@ -235,7 +455,7 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             div.replace_with_children()
         
         for tag in soup.find_all(True):
-            if tag.name not in ['img', 'h2', 'span']:
+            if tag.name not in ['img', 'h2', 'span', 'a', 'ul', 'li']:
                 if tag.has_attr('style'):
                     del tag['style']
                 for attr in ['class', 'id', 'name']:
@@ -294,7 +514,7 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             responsive_div['class'] = 'table-responsive'
             table.wrap(responsive_div)
         
-        # CSS final avec votre style
+        # CSS final
         html_final = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -339,6 +559,31 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             margin: 12px 0; 
             text-align: justify;
         }}
+        ul {{ 
+            margin: 10px 0; 
+            padding-left: 20px;
+        }}
+        ul ul {{ 
+            margin: 5px 0; 
+            padding-left: 25px;
+        }}
+        ul ul ul {{ 
+            margin: 3px 0; 
+            padding-left: 25px;
+        }}
+        li {{ 
+            margin: 3px 0; 
+            line-height: 1.4;
+        }}
+        a {{ 
+            color: #2c3e50; 
+            text-decoration: none;
+            border-bottom: 1px dotted #3498db;
+        }}
+        a:hover {{ 
+            color: #3498db; 
+            border-bottom: 1px solid #3498db;
+        }}
         table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
         th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
         th {{ background-color: #f2f2f2; font-weight: bold; }}
@@ -353,7 +598,6 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
 </body>
 </html>"""
         
-        # Extraire seulement le contenu body pour avoir le HTML final propre
         soup_final = BeautifulSoup(html_final, 'html.parser')
         clean_content = ""
         if soup_final.body:
@@ -368,6 +612,9 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             'titres_convertis': titres_convertis,
             'apostrophes_changees': apostrophes_changees,
             'mots_wrapes': mots_tirets_wrapes,
+            'toc_convertie': toc_convertie,
+            'tableaux_traites': tableaux_traites,
+            'titres_avec_id': titres_avec_id,
             'nb_paragraphes': len(structure_originale)
         }
         
@@ -379,10 +626,8 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
 
 # Interface Streamlit
 def main():
-    # Header
     st.markdown('<h1 class="main-header">📄 Word to HTML Converter</h1>', unsafe_allow_html=True)
     
-    # Sidebar
     with st.sidebar:
         st.header("⚙️ Options")
         
@@ -398,13 +643,16 @@ def main():
         1. **Uploadez** votre fichier Word (.docx)
         2. **Attendez** la conversion
         3. **Téléchargez** le HTML résultant
-        4. Les images seront remplacées par `img_sample.jpg`
-        5. Les titres seront automatiquement détectés
-        6. Les apostrophes seront corrigées (') → (')
-        7. Les mots à tirets seront protégés
+        
+        **✨ Fonctionnalités:**
+        - Images → `img_sample.jpg`
+        - Titres automatiquement détectés
+        - Apostrophes corrigées (') → (')
+        - Mots à tirets protégés
+        - **📋 Tables de matières avec liens**
+        - **📊 Tableaux améliorés**
         """)
     
-    # Zone d'upload principale
     st.markdown('<div class="upload-section">', unsafe_allow_html=True)
     
     col1, col2 = st.columns([2, 1])
@@ -414,7 +662,7 @@ def main():
         uploaded_file = st.file_uploader(
             "Choose a Word document",
             type=['docx'],
-            help="Glissez-déposez votre fichier .docx ici ou cliquez pour parcourir"
+            help="Glissez-déposez votre fichier .docx ici"
         )
     
     with col2:
@@ -423,14 +671,12 @@ def main():
         **Formats acceptés:**
         - .docx (Word 2007+)
         - Taille max: 200MB
-        - Images → img_sample.jpg
+        - Tables de matières auto-détectées
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Traitement du fichier
     if uploaded_file is not None:
-        # Informations sur le fichier
         st.markdown('<div class="info-box">', unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -441,41 +687,35 @@ def main():
             st.metric("🗂️ Type", uploaded_file.type)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Bouton de conversion
         if st.button("🚀 Convertir en HTML", type="primary", use_container_width=True):
             with st.spinner("Conversion en cours..."):
-                # Lire le fichier
                 fichier_bytes = uploaded_file.getvalue()
-                
-                # Convertir avec votre code complet
                 html_resultat, stats = convertir_word_vers_html_complet(fichier_bytes, uploaded_file.name)
                 
                 if html_resultat and stats:
-                    # Section des résultats
                     st.markdown('<div class="result-section">', unsafe_allow_html=True)
                     st.success("✅ Conversion réussie!")
                     
-                    # Statistiques
                     if afficher_stats:
                         st.markdown("### 📊 Statistiques de conversion")
-                        col1, col2, col3, col4, col5 = st.columns(5)
+                        col1, col2, col3, col4 = st.columns(4)
                         with col1:
                             st.metric("🖼️ Images", stats['nb_images'])
-                        with col2:
                             st.metric("📑 Titres H2", stats['titres_convertis'])
-                        with col3:
+                        with col2:
                             st.metric("🔗 Mots protégés", stats['mots_wrapes'])
-                        with col4:
                             st.metric("✏️ Apostrophes", stats['apostrophes_changees'])
-                        with col5:
+                        with col3:
+                            st.metric("📋 Table matières", "✅" if stats['toc_convertie'] else "❌")
+                            st.metric("📊 Tableaux", stats['tableaux_traites'])
+                        with col4:
+                            st.metric("🔗 IDs titres", stats['titres_avec_id'])
                             st.metric("📝 Paragraphes", stats['nb_paragraphes'])
                     
-                    # Prévisualisation
                     st.markdown("### 👁️ Prévisualisation")
                     with st.expander("Voir le code HTML généré", expanded=False):
                         st.code(html_resultat, language='html')
                     
-                    # Téléchargement
                     nom_sortie = uploaded_file.name.replace('.docx', '_converted.html')
                     
                     st.download_button(
@@ -489,7 +729,6 @@ def main():
                     
                     st.markdown('</div>', unsafe_allow_html=True)
                     
-                    # Aperçu (note: les images img_sample.jpg ne s'afficheront que si le fichier existe)
                     st.markdown("### 🌐 Aperçu du rendu")
                     st.components.v1.html(
                         f"<div style='font-family: Georgia; line-height: 1.6; padding: 20px;'>{html_resultat}</div>", 
@@ -498,11 +737,10 @@ def main():
                     )
                 
                 else:
-                    st.error("❌ Échec de la conversion. Vérifiez que votre fichier est un document Word valide.")
+                    st.error("❌ Échec de la conversion.")
     
     else:
-        # Instructions quand aucun fichier n'est uploadé
-        st.markdown("### 🎯 Fonctionnalités de ce convertisseur")
+        st.markdown("### 🎯 Fonctionnalités du convertisseur")
         
         col1, col2, col3 = st.columns(3)
         
@@ -526,11 +764,11 @@ def main():
         
         with col3:
             st.markdown("""
-            **📊 Détection intelligente:**
-            - Analyse de la structure XML
-            - Position exacte des images
-            - Titres vs texte en gras
-            - Préservation de l'ordre
+            **📋 Tables de matières:**
+            - Détection automatique
+            - Conversion avec liens
+            - Numérotation hiérarchique
+            - **📊 Tableaux améliorés**
             """)
 
 if __name__ == "__main__":
