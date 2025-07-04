@@ -296,7 +296,7 @@ def nettoyer_images_dans_html(html_content):
     counter = [1]
     
     def remplacer_image(match):
-        img_tag = f'<img src="{placeholder_path}" alt="Image {counter[0]}" class="sample-img" style="max-width: 300px; height: auto; border: 1px solid #ddd; margin: 10px 0;" />'
+        img_tag = f'<img src="{placeholder_path}" alt="Image {counter[0]}" class="" />'
         counter[0] += 1
         return img_tag
     
@@ -549,6 +549,31 @@ def main():
             help="Montre les détails de la conversion"
         )
         
+        # Ajout de la section de personnalisation des classes CSS
+        st.markdown("---")
+        st.header("🎨 Personnalisation CSS")
+        
+        # Créer un dictionnaire pour stocker les classes personnalisées
+        custom_classes = {}
+        
+        # Ajouter un expander pour ne pas surcharger l'interface
+        with st.expander("Personnaliser les balises HTML", expanded=False):
+            st.markdown("Ajoutez des classes CSS à des balises HTML spécifiques (sans inclure l'attribut `class=`):")
+            st.info("Exemple: Pour obtenir `<h1 class=\"h2\">`, entrez simplement `h2`")
+            
+            # Liste des balises que l'utilisateur peut personnaliser
+            tags_to_customize = ['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'li', 'table', 'img']
+            
+            # Créer une interface pour chaque tag
+            for tag in tags_to_customize:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.markdown(f"**&lt;{tag}&gt;**")
+                with col2:
+                    class_value = st.text_input("", key=f"class_{tag}", placeholder=f"Nom(s) de classe pour {tag}")
+                    if class_value:
+                        custom_classes[tag] = class_value
+        
         st.markdown("---")
         st.markdown("### 📋 Instructions")
         st.markdown("""
@@ -562,6 +587,7 @@ def main():
         - Apostrophes corrigées (') → (')
         - Mots à tirets protégés
         - **📋 Tables de matières avec liens !**
+        - **🎨 Personnalisation des classes CSS**
         """)
     
     # Zone d'upload principale
@@ -611,6 +637,10 @@ def main():
                 html_resultat, stats = convertir_word_vers_html_complet(fichier_bytes, uploaded_file.name)
                 
                 if html_resultat and stats:
+                    # Appliquer les classes personnalisées si nécessaire
+                    if custom_classes:
+                        html_resultat = appliquer_classes_personnalisees(html_resultat, custom_classes)
+                    
                     # Section des résultats
                     st.markdown('<div class="result-section">', unsafe_allow_html=True)
                     st.success("✅ Conversion réussie!")
@@ -631,6 +661,14 @@ def main():
                             st.metric("📋 Table matières", "✅" if stats['toc_convertie'] else "❌")
                         with col6:
                             st.metric("📝 Paragraphes", stats['nb_paragraphes'])
+                        
+                        # Ajouter des statistiques sur les classes personnalisées
+                        if custom_classes:
+                            st.markdown("### 🎨 Classes CSS personnalisées appliquées")
+                            classes_cols = st.columns(len(custom_classes))
+                            for i, (tag, classe) in enumerate(custom_classes.items()):
+                                with classes_cols[i]:
+                                    st.metric(f"Tag <{tag}>", classe)
                     
                     # Prévisualisation
                     st.markdown("### 👁️ Prévisualisation")
@@ -694,6 +732,77 @@ def main():
             - Liens avec ancres `#1.2.3`
             - Numérotation hiérarchique
             """)
+            
+            st.markdown("""
+            **🎨 Personnalisation CSS:**
+            - Ajout de classes aux balises HTML
+            - Exemple: `h2` → `h2 class="my-custom-class"`
+            - Styles personnalisés pour tous les éléments
+            """)
+
+# Fonction pour appliquer les classes personnalisées au HTML
+def appliquer_classes_personnalisees(html_content, custom_classes):
+    """
+    Applique les classes CSS personnalisées aux balises HTML spécifiées.
+    
+    Args:
+        html_content (str): Le contenu HTML à modifier
+        custom_classes (dict): Dictionnaire des balises et leurs classes à appliquer
+    
+    Returns:
+        str: Le HTML modifié avec les classes appliquées
+    """
+    if not custom_classes:
+        return html_content
+    
+    try:
+        from bs4 import BeautifulSoup
+        
+        # Parser le HTML
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Appliquer les classes à chaque type de balise
+        for tag, class_value in custom_classes.items():
+            # Trouver toutes les balises du type spécifié
+            elements = soup.find_all(tag)
+            
+            for element in elements:
+                # Nettoyer la valeur de classe entrée par l'utilisateur
+                # Supprimer les attributs 'class=' ou class=" s'ils sont inclus
+                cleaned_value = class_value.replace('class=', '').strip()
+                if cleaned_value.startswith('"') and cleaned_value.endswith('"'):
+                    cleaned_value = cleaned_value[1:-1]
+                elif cleaned_value.startswith("'") and cleaned_value.endswith("'"):
+                    cleaned_value = cleaned_value[1:-1]
+                
+                # Diviser en classes individuelles
+                new_classes = cleaned_value.split()
+                
+                # Récupérer les classes existantes
+                existing_classes = element.get('class', [])
+                
+                # Convertir en liste si c'est une chaîne ou None
+                if existing_classes is None:
+                    existing_classes = []
+                elif isinstance(existing_classes, str):
+                    existing_classes = [existing_classes]
+                
+                # Fusionner les classes sans duplicats
+                final_classes = list(existing_classes)
+                for cls in new_classes:
+                    if cls not in final_classes:
+                        final_classes.append(cls)
+                
+                # Appliquer les classes fusionnées
+                element['class'] = final_classes
+        
+        # Convertir le soup modifié en string
+        return str(soup)
+    
+    except Exception as e:
+        # En cas d'erreur, retourner le HTML original
+        print(f"Erreur lors de l'application des classes personnalisées: {e}")
+        return html_content
 
 if __name__ == "__main__":
     main()
