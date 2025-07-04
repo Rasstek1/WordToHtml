@@ -537,7 +537,94 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
 # Interface Streamlit
 def main():
     # Header
-    st.markdown('<h1 class="main-header">📄 Word to HTML Converter</h1>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="title-container" style="
+    text-align: center;
+    margin: 30px auto;
+    padding: 20px;
+    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: glow 2s infinite alternate;
+">
+    <h1 style="
+        font-family: 'Trebuchet MS', sans-serif;
+        font-size: 3.2rem;
+        font-weight: 800;
+        letter-spacing: 3px;
+        color: #fff;
+        text-transform: uppercase;
+        margin: 0;
+        padding: 0;
+        text-shadow: 3px 3px 10px rgba(0, 0, 0, 0.4);
+    ">
+        <span style="
+            background: linear-gradient(90deg, #ff8a00, #e52e71);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: none;
+        "></span>
+        ☠️WORD TO HTML CONVERTER☠️
+        <span style="
+            background: linear-gradient(90deg, #e52e71, #ff8a00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: none;
+        "></span>
+    </h1>
+    <p style="
+        font-family: 'Arial', sans-serif;
+        font-size: 1.2rem;
+        color: rgba(255, 255, 255, 0.8);
+        margin-top: 10px;
+        font-style: italic;
+    ">Transform your documents with just one damn click!</p>
+</div>
+
+<style>
+@keyframes glow {
+    from {
+        box-shadow: 0 0 20px -10px rgba(66, 133, 244, 0.8);
+    }
+    to {
+        box-shadow: 0 0 25px 5px rgba(66, 133, 244, 0.8);
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+    st.markdown("""
+<style>
+.rasstek-signature {
+    text-align: center;
+    margin-top: 10px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6c757d;
+    letter-spacing: 1.5px;
+    position: relative;
+    overflow: hidden;
+}
+.rasstek-signature:after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #3498db, transparent);
+    animation: line-anim 2s infinite;
+}
+@keyframes line-anim {
+    0% { width: 0; left: 0; }
+    50% { width: 100%; left: 0; }
+    100% { width: 0; left: 100%; }
+}
+</style>
+<div class="rasstek-signature">
+    BUILT BY RASSTEK<sup>©</sup>
+</div>
+""", unsafe_allow_html=True)
     
     # Sidebar
     with st.sidebar:
@@ -739,6 +826,7 @@ def main():
             - Exemple: `h2` → `h2 class="my-custom-class"`
             - Styles personnalisés pour tous les éléments
             """)
+
 
 # Fonction pour appliquer les classes personnalisées au HTML
 def appliquer_classes_personnalisees(html_content, custom_classes):
