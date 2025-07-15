@@ -382,49 +382,72 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             if not span.get('class') or 'nowrap' not in span.get('class', []):
                 span.replace_with(span.text)
         
-        # Traitement des tableaux
-        for table in soup.find_all('table'):
-            table['class'] = 'table table-bordered'
-            
-            caption = table.find('caption')
-            if not caption:
-                caption = soup.new_tag('caption')
-                caption.string = '(Tableau)'
-                table.insert(0, caption)
-            
-            thead = table.find('thead')
-            if not thead and table.tr:
-                thead = soup.new_tag('thead')
-                thead['class'] = 'well'
-                first_row = table.tr
-                thead.append(first_row.extract())
-                table.insert(1, thead)
-                
-                for td in thead.find_all('td'):
-                    th = soup.new_tag('th')
-                    th['scope'] = 'col'
-                    th.string = td.get_text()
-                    td.replace_with(th)
-            
-            tbody = table.find('tbody')
-            if not tbody:
-                tbody = soup.new_tag('tbody')
-                for tr in table.find_all('tr'):
-                    tbody.append(tr.extract())
-                table.append(tbody)
-            
-            for tr in tbody.find_all('tr'):
-                cells = tr.find_all('td')
-                if cells:
-                    cells[0]['scope'] = 'row'
-            
-            responsive_div = soup.new_tag('div')
-            responsive_div['class'] = 'table-responsive'
-            table.wrap(responsive_div)
+  # Traitement des tableaux
+for table in soup.find_all('table'):
+    table['class'] = 'table table-bordered'
+    
+    # Chercher le titre du tableau dans l'élément précédent
+    caption = table.find('caption')
+    if not caption:
+        caption = soup.new_tag('caption')
         
-        # CSS final avec style pour les tables de matières
-        html_final = f"""<!DOCTYPE html>
+        # Chercher le titre dans les éléments précédents
+        titre_trouve = False
+        element_precedent = table.find_previous_sibling()
+        
+        while element_precedent and not titre_trouve:
+            texte = element_precedent.get_text().strip()
+            
+            # Vérifier si c'est un titre de tableau (commence par "Table" ou "Tableau")
+            if (texte.lower().startswith('table') or 
+                texte.lower().startswith('tableau')):
+                caption.string = texte
+                titre_trouve = True
+                # Optionnel : supprimer l'élément titre original pour éviter la duplication
+                element_precedent.decompose()
+            else:
+                element_precedent = element_precedent.find_previous_sibling()
+        
+        # Si aucun titre trouvé, utiliser un titre par défaut
+        if not titre_trouve:
+            caption.string = '(Tableau)'
+        
+        table.insert(0, caption)
+    
+    thead = table.find('thead')
+    if not thead and table.tr:
+        thead = soup.new_tag('thead')
+        thead['class'] = 'well'
+        first_row = table.tr
+        thead.append(first_row.extract())
+        table.insert(1, thead)
+        
+        for td in thead.find_all('td'):
+            th = soup.new_tag('th')
+            th['scope'] = 'col'
+            th.string = td.get_text()
+            td.replace_with(th)
+    
+    tbody = table.find('tbody')
+    if not tbody:
+        tbody = soup.new_tag('tbody')
+        for tr in table.find_all('tr'):
+            tbody.append(tr.extract())
+        table.append(tbody)
+    
+    for tr in tbody.find_all('tr'):
+        cells = tr.find_all('td')
+        if cells:
+            cells[0]['scope'] = 'row'
+    
+    responsive_div = soup.new_tag('div')
+    responsive_div['class'] = 'table-responsive'
+    table.wrap(responsive_div)
+
+# CSS final avec style pour les tables de matières
+html_final = f"""<!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>{nom_fichier} - Converti</title>
