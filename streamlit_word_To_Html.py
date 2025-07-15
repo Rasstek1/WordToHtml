@@ -286,14 +286,14 @@ def analyser_structure_document_bytes(fichier_word_bytes):
 
 def nettoyer_images_dans_html(html_content):
     """Remplace toutes les images avec des données longues par l'image sample"""
-    placeholder_path = "img_sample.jpg"
+    placeholder_path = "https://picsum.photos/800/600"
     pattern_img_longue = r'<img[^>]*src="data:image/[^"]{100,}"[^>]*/?>'
     images_longues = re.findall(pattern_img_longue, html_content)
     
     counter = [1]
     
     def remplacer_image(match):
-        img_tag = f'<img src="{placeholder_path}" alt="Image {counter[0]}" class="" />'
+        img_tag = f'<img src="{placeholder_path}" alt="Image {counter[0]}" class="img-responsive"  />'
         counter[0] += 1
         return img_tag
     
@@ -329,7 +329,7 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
         
         if len(images_html) < images_attendues:
             paragraphes_html = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-            placeholder_path = "img_sample.jpg"
+            placeholder_path = "https://picsum.photos/800/600"
             
             images_ajoutees = len(images_html)
             for elem_xml in structure_originale:
@@ -345,8 +345,8 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
                                             img_tag = soup.new_tag('img', 
                                                                  src=placeholder_path, 
                                                                  alt=f'Image {images_ajoutees + 1}',
-                                                                 class_='sample-img',
-                                                                 style='max-width: 300px; height: auto; border: 1px solid #ddd; margin: 10px 0;')
+                                                                 class_='img-responsive',
+                                                                 style='')
                                             para_html.insert_after(img_tag)
                                             images_ajoutees += 1
                                 break
