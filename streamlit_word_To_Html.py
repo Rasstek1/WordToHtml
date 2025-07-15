@@ -379,62 +379,89 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             if not span.get('class') or 'nowrap' not in span.get('class', []):
                 span.replace_with(span.text)
         
-        # Traitement des tableaux avec récupération du titre
+# Traitement des tableaux avec récupération du titre
+# Traitement des tableaux avec récupération du titre
         for table in soup.find_all('table'):
             table['class'] = 'table table-bordered'
             
-            caption = table.find('caption')
-            if not caption:
-                caption = soup.new_tag('caption')
-                
-                # Chercher le titre dans les éléments précédents
-                titre_trouve = False
-                current = table.previous_sibling
-                attempts = 0
-                
-                while current and attempts < 5 and not titre_trouve:
-                    if hasattr(current, 'get_text'):
-                        texte = current.get_text().strip()
-                        if texte and ('table' in texte.lower() or 'tableau' in texte.lower()):
-                            caption.string = texte
-                            titre_trouve = True
-                            # Marquer l'élément pour suppression après traitement
-                            current.extract()
-                            break
-                    current = current.previous_sibling
-                    attempts += 1
-                
-                if not titre_trouve:
-                    caption.string = 'Tableau'
-                
-                table.insert(0, caption)
+            # Chercher le titre dans les éléments précédents
+            titre_tableau = None
+            current = table.previous_sibling
+            attempts = 0
             
+            while current and attempts < 5:
+                if hasattr(current, 'get_text'):
+                    texte = current.get_text().strip()
+                    if texte and ('table' in texte.lower() or 'tableau' in texte.lower()):
+                        titre_tableau = texte
+                        # Supprimer l'élément titre pour éviter la duplication
+                        current.extract()
+                        break
+                current = current.previous_sibling
+                attempts += 1
+            
+            # Créer ou modifier le caption
+            caption = table.find('caption')
+            if caption:
+                caption.decompose()  # Supprimer l'ancien caption s'il existe
+            
+            caption = soup.new_tag('caption')
+            if titre_tableau:
+                caption.string = f"({titre_tableau})"
+            else:
+                caption.string = "(Tableau)"
+            table.insert(0, caption)
+            
+            # Traiter le thead
             thead = table.find('thead')
-            if not thead and table.tr:
+            if not thead:
+                # Créer thead s'il n'existe pas
                 thead = soup.new_tag('thead')
                 thead['class'] = 'well'
-                first_row = table.tr
-                thead.append(first_row.extract())
-                table.insert(1, thead)
                 
+                # Prendre la première ligne comme en-tête
+                first_row = table.find('tr')
+                if first_row:
+                    # Cloner la première ligne pour le thead
+                    new_header_row = soup.new_tag('tr')
+                    for cell in first_row.find_all(['td', 'th']):
+                        th = soup.new_tag('th')
+                        th['scope'] = 'col'
+                        th.string = cell.get_text().strip()
+                        new_header_row.append(th)
+                    
+                    thead.append(new_header_row)
+                    table.insert(1, thead)
+                    
+                    # Supprimer la première ligne du tbody (elle est maintenant dans thead)
+                    first_row.decompose()
+            else:
+                # S'assurer que thead a la bonne classe
+                thead['class'] = 'well'
+                
+                # Convertir tous les td en th dans thead et ajouter scope="col"
                 for td in thead.find_all('td'):
                     th = soup.new_tag('th')
                     th['scope'] = 'col'
-                    th.string = td.get_text()
+                    th.string = td.get_text().strip()
                     td.replace_with(th)
             
+            # Traiter le tbody
             tbody = table.find('tbody')
             if not tbody:
                 tbody = soup.new_tag('tbody')
+                # Déplacer toutes les lignes restantes vers tbody
                 for tr in table.find_all('tr'):
                     tbody.append(tr.extract())
                 table.append(tbody)
             
+            # Ajouter scope="row" à la première cellule de chaque ligne dans tbody
             for tr in tbody.find_all('tr'):
-                cells = tr.find_all('td')
-                if cells:
-                    cells[0]['scope'] = 'row'
+                first_cell = tr.find('td')
+                if first_cell:
+                    first_cell['scope'] = 'row'
             
+            # Envelopper le tableau dans div.table-responsive
             responsive_div = soup.new_tag('div')
             responsive_div['class'] = 'table-responsive'
             table.wrap(responsive_div)
