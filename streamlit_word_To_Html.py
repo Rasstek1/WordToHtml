@@ -175,8 +175,6 @@ def convertir_liste_en_toc(liste_element, soup):
         
         return texte.strip()
     
-    
-    
     def traiter_niveau(items, niveau=1, numero_parent=""):
         """Traite récursivement chaque niveau de la liste"""
         for index, li in enumerate(items):
@@ -244,7 +242,6 @@ def convertir_liste_en_toc(liste_element, soup):
     # Traiter tous les éléments de premier niveau
     items_premier_niveau = liste_element.find_all('li', recursive=False)
     traiter_niveau(items_premier_niveau)
-    
 
 def analyser_structure_document_bytes(fichier_word_bytes):
     """Analyse la structure complète du document Word pour préserver l'ordre exact"""
@@ -382,72 +379,69 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             if not span.get('class') or 'nowrap' not in span.get('class', []):
                 span.replace_with(span.text)
         
-  # Traitement des tableaux
-for table in soup.find_all('table'):
-    table['class'] = 'table table-bordered'
-    
-    # Chercher le titre du tableau dans l'élément précédent
-    caption = table.find('caption')
-    if not caption:
-        caption = soup.new_tag('caption')
-        
-        # Chercher le titre dans les éléments précédents
-        titre_trouve = False
-        element_precedent = table.find_previous_sibling()
-        
-        while element_precedent and not titre_trouve:
-            texte = element_precedent.get_text().strip()
+        # Traitement des tableaux avec récupération du titre
+        for table in soup.find_all('table'):
+            table['class'] = 'table table-bordered'
             
-            # Vérifier si c'est un titre de tableau (commence par "Table" ou "Tableau")
-            if (texte.lower().startswith('table') or 
-                texte.lower().startswith('tableau')):
-                caption.string = texte
-                titre_trouve = True
-                # Optionnel : supprimer l'élément titre original pour éviter la duplication
-                element_precedent.decompose()
-            else:
-                element_precedent = element_precedent.find_previous_sibling()
+            caption = table.find('caption')
+            if not caption:
+                caption = soup.new_tag('caption')
+                
+                # Chercher le titre dans les éléments précédents
+                titre_trouve = False
+                current = table.previous_sibling
+                attempts = 0
+                
+                while current and attempts < 5 and not titre_trouve:
+                    if hasattr(current, 'get_text'):
+                        texte = current.get_text().strip()
+                        if texte and ('table' in texte.lower() or 'tableau' in texte.lower()):
+                            caption.string = texte
+                            titre_trouve = True
+                            # Marquer l'élément pour suppression après traitement
+                            current.extract()
+                            break
+                    current = current.previous_sibling
+                    attempts += 1
+                
+                if not titre_trouve:
+                    caption.string = 'Tableau'
+                
+                table.insert(0, caption)
+            
+            thead = table.find('thead')
+            if not thead and table.tr:
+                thead = soup.new_tag('thead')
+                thead['class'] = 'well'
+                first_row = table.tr
+                thead.append(first_row.extract())
+                table.insert(1, thead)
+                
+                for td in thead.find_all('td'):
+                    th = soup.new_tag('th')
+                    th['scope'] = 'col'
+                    th.string = td.get_text()
+                    td.replace_with(th)
+            
+            tbody = table.find('tbody')
+            if not tbody:
+                tbody = soup.new_tag('tbody')
+                for tr in table.find_all('tr'):
+                    tbody.append(tr.extract())
+                table.append(tbody)
+            
+            for tr in tbody.find_all('tr'):
+                cells = tr.find_all('td')
+                if cells:
+                    cells[0]['scope'] = 'row'
+            
+            responsive_div = soup.new_tag('div')
+            responsive_div['class'] = 'table-responsive'
+            table.wrap(responsive_div)
         
-        # Si aucun titre trouvé, utiliser un titre par défaut
-        if not titre_trouve:
-            caption.string = '(Tableau)'
-        
-        table.insert(0, caption)
-    
-    thead = table.find('thead')
-    if not thead and table.tr:
-        thead = soup.new_tag('thead')
-        thead['class'] = 'well'
-        first_row = table.tr
-        thead.append(first_row.extract())
-        table.insert(1, thead)
-        
-        for td in thead.find_all('td'):
-            th = soup.new_tag('th')
-            th['scope'] = 'col'
-            th.string = td.get_text()
-            td.replace_with(th)
-    
-    tbody = table.find('tbody')
-    if not tbody:
-        tbody = soup.new_tag('tbody')
-        for tr in table.find_all('tr'):
-            tbody.append(tr.extract())
-        table.append(tbody)
-    
-    for tr in tbody.find_all('tr'):
-        cells = tr.find_all('td')
-        if cells:
-            cells[0]['scope'] = 'row'
-    
-    responsive_div = soup.new_tag('div')
-    responsive_div['class'] = 'table-responsive'
-    table.wrap(responsive_div)
-
-# CSS final avec style pour les tables de matières
-html_final = f"""<!DOCTYPE html>
+        # CSS final avec style pour les tables de matières
+        html_final = f"""<!DOCTYPE html>
 <html>
-
 <head>
     <meta charset="utf-8">
     <title>{nom_fichier} - Converti</title>
@@ -517,9 +511,34 @@ html_final = f"""<!DOCTYPE html>
             border-bottom: 1px solid #3498db;
         }}
         /* Tables */
-        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-        th {{ background-color: #f2f2f2; font-weight: bold; }}
+        .table-responsive {{
+            overflow-x: auto;
+            margin: 20px 0;
+        }}
+        .table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }}
+        .table-bordered {{
+            border: 1px solid #ddd;
+        }}
+        .table th, .table td {{
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }}
+        .table thead {{
+            background-color: #f5f5f5;
+        }}
+        caption {{
+            caption-side: top;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }}
         /* Typographie */
         body {{
             font-feature-settings: "liga", "kern";
@@ -615,6 +634,7 @@ def main():
 }
 </style>
 """, unsafe_allow_html=True)
+
     st.markdown("""
 <style>
 .rasstek-signature {
@@ -698,6 +718,7 @@ def main():
         - Mots à tirets protégés
         - **📋 Tables de matières avec liens !**
         - **🎨 Personnalisation des classes CSS**
+        - **📊 Titres de tableaux automatiques**
         """)
     
     # Zone d'upload principale
@@ -720,6 +741,7 @@ def main():
         - .docx (Word 2007+)
         - Taille max: 200MB
         - Tables de matières auto-détectées
+        - Titres de tableaux automatiques
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -846,10 +868,9 @@ def main():
             st.markdown("""
             **🎨 Personnalisation CSS:**
             - Ajout de classes aux balises HTML
-            - Exemple: `h2` → `h2 class="my-custom-class"`
+            - Titres de tableaux automatiques
             - Styles personnalisés pour tous les éléments
             """)
-
 
 # Fonction pour appliquer les classes personnalisées au HTML
 def appliquer_classes_personnalisees(html_content, custom_classes):
