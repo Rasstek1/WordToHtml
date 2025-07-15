@@ -379,7 +379,6 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             if not span.get('class') or 'nowrap' not in span.get('class', []):
                 span.replace_with(span.text)
         
-
 # Traitement des tableaux avec récupération du titre
         for table in soup.find_all('table'):
             table['class'] = 'table table-bordered'
@@ -412,72 +411,67 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
                 caption.string = "Tableau"
             table.insert(0, caption)
             
-            # Traiter le thead
-            thead = table.find('thead')
-            if not thead:
-                # Créer thead s'il n'existe pas
+            # Récupérer toutes les lignes avant de traiter thead/tbody
+            all_rows = table.find_all('tr')
+            
+            # Supprimer thead et tbody existants
+            existing_thead = table.find('thead')
+            if existing_thead:
+                existing_thead.decompose()
+            existing_tbody = table.find('tbody')
+            if existing_tbody:
+                existing_tbody.decompose()
+            
+            # Créer nouveau thead avec la première ligne
+            if all_rows:
                 thead = soup.new_tag('thead')
                 thead['class'] = 'well'
                 
-                # Prendre la première ligne comme en-tête
-                first_row = table.find('tr')
-                if first_row:
-                    # Cloner la première ligne pour le thead
-                    new_header_row = soup.new_tag('tr')
-                    for cell in first_row.find_all(['td', 'th']):
-                        th = soup.new_tag('th')
-                        th['scope'] = 'col'
-                        th.string = cell.get_text().strip()
-                        new_header_row.append(th)
-                    
-                    thead.append(new_header_row)
-                    table.insert(1, thead)
-                    
-                    # Supprimer la première ligne du tbody (elle est maintenant dans thead)
-                    first_row.decompose()
-            else:
-                # S'assurer que thead a la bonne classe
-                thead['class'] = 'well'
+                # Prendre la première ligne pour le header
+                first_row = all_rows[0]
+                header_row = soup.new_tag('tr')
                 
-                # Convertir tous les td en th dans thead et ajouter scope="col"
-                for td in thead.find_all('td'):
+                # Convertir toutes les cellules de la première ligne en th
+                for cell in first_row.find_all(['td', 'th']):
                     th = soup.new_tag('th')
                     th['scope'] = 'col'
-                    th.string = td.get_text().strip()
-                    td.replace_with(th)
-            
-            # Traiter le tbody
-            tbody = table.find('tbody')
-            if not tbody:
+                    th.string = cell.get_text().strip()
+                    header_row.append(th)
+                
+                thead.append(header_row)
+                table.append(thead)
+                
+                # Supprimer la première ligne de all_rows
+                first_row.decompose()
+                
+                # Créer tbody avec les lignes restantes
                 tbody = soup.new_tag('tbody')
-                # Déplacer toutes les lignes restantes vers tbody
-                remaining_rows = table.find_all('tr')
-                for tr in remaining_rows:
-                    tbody.append(tr.extract())
-                table.append(tbody)
-            
-            # Traiter les cellules dans tbody
-            for tr in tbody.find_all('tr'):
-                cells = tr.find_all(['td', 'th'])
-                if cells:
-                    # Première cellule avec scope="row"
-                    first_cell = cells[0]
-                    if first_cell.name == 'th':
-                        # Convertir th en td pour les cellules du tbody
-                        td = soup.new_tag('td')
-                        td['scope'] = 'row'
-                        # Conserver le contenu existant (y compris les balises p)
-                        td.extend(first_cell.contents)
-                        first_cell.replace_with(td)
-                    else:
-                        first_cell['scope'] = 'row'
-                    
-                    # Autres cellules - s'assurer qu'elles sont des td
-                    for cell in cells[1:]:
-                        if cell.name == 'th':
+                
+                # Traiter les lignes restantes (sauf la première qui est maintenant dans thead)
+                for tr in all_rows[1:]:
+                    # S'assurer que la première cellule a scope="row"
+                    cells = tr.find_all(['td', 'th'])
+                    if cells:
+                        first_cell = cells[0]
+                        if first_cell.name == 'th':
+                            # Convertir th en td
                             td = soup.new_tag('td')
-                            td.extend(cell.contents)
-                            cell.replace_with(td)
+                            td['scope'] = 'row'
+                            td.extend(first_cell.contents)
+                            first_cell.replace_with(td)
+                        else:
+                            first_cell['scope'] = 'row'
+                        
+                        # Convertir les autres th en td dans le tbody
+                        for cell in cells[1:]:
+                            if cell.name == 'th':
+                                td = soup.new_tag('td')
+                                td.extend(cell.contents)
+                                cell.replace_with(td)
+                    
+                    tbody.append(tr)
+                
+                table.append(tbody)
             
             # Envelopper le tableau dans div.table-responsive
             responsive_div = soup.new_tag('div')
