@@ -379,7 +379,7 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             if not span.get('class') or 'nowrap' not in span.get('class', []):
                 span.replace_with(span.text)
         
-# Traitement des tableaux avec récupération du titre
+
 # Traitement des tableaux avec récupération du titre
         for table in soup.find_all('table'):
             table['class'] = 'table table-bordered'
@@ -407,9 +407,9 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             
             caption = soup.new_tag('caption')
             if titre_tableau:
-                caption.string = f"({titre_tableau})"
+                caption.string = titre_tableau  # Pas de parenthèses
             else:
-                caption.string = "(Tableau)"
+                caption.string = "Tableau"
             table.insert(0, caption)
             
             # Traiter le thead
@@ -451,15 +451,33 @@ def convertir_word_vers_html_complet(fichier_word_bytes, nom_fichier):
             if not tbody:
                 tbody = soup.new_tag('tbody')
                 # Déplacer toutes les lignes restantes vers tbody
-                for tr in table.find_all('tr'):
+                remaining_rows = table.find_all('tr')
+                for tr in remaining_rows:
                     tbody.append(tr.extract())
                 table.append(tbody)
             
-            # Ajouter scope="row" à la première cellule de chaque ligne dans tbody
+            # Traiter les cellules dans tbody
             for tr in tbody.find_all('tr'):
-                first_cell = tr.find('td')
-                if first_cell:
-                    first_cell['scope'] = 'row'
+                cells = tr.find_all(['td', 'th'])
+                if cells:
+                    # Première cellule avec scope="row"
+                    first_cell = cells[0]
+                    if first_cell.name == 'th':
+                        # Convertir th en td pour les cellules du tbody
+                        td = soup.new_tag('td')
+                        td['scope'] = 'row'
+                        # Conserver le contenu existant (y compris les balises p)
+                        td.extend(first_cell.contents)
+                        first_cell.replace_with(td)
+                    else:
+                        first_cell['scope'] = 'row'
+                    
+                    # Autres cellules - s'assurer qu'elles sont des td
+                    for cell in cells[1:]:
+                        if cell.name == 'th':
+                            td = soup.new_tag('td')
+                            td.extend(cell.contents)
+                            cell.replace_with(td)
             
             # Envelopper le tableau dans div.table-responsive
             responsive_div = soup.new_tag('div')
